@@ -36,8 +36,7 @@ class GuestBottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildNavItem(context, Icons.home_rounded, 'Home', 0),
-          _buildNavItem(context, Icons.access_time_rounded, 'History', 1),
-          _buildNavItem(context, Icons.person_rounded, 'Profile', 2),
+          _buildNavItem(context, Icons.person_rounded, 'Profile', 1),
         ],
       ),
     );
@@ -52,8 +51,6 @@ class GuestBottomNav extends StatelessWidget {
           if (index == 0) {
             _navigateToPage(context, AppRoutes.home);
           } else if (index == 1) {
-            _navigateToPage(context, AppRoutes.history);
-          } else if (index == 2) {
             _navigateToPage(context, AppRoutes.profile);
           }
         }

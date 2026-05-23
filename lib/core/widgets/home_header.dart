@@ -5,7 +5,8 @@ import '../../features/profile/pages/profile_page.dart';
 
 class HomeHeader extends StatelessWidget {
   final bool isGuest;
-  const HomeHeader({super.key, this.isGuest = true});
+  final String? userName;
+  const HomeHeader({super.key, this.isGuest = true, this.userName});
 
   @override
   Widget build(BuildContext context) {
@@ -106,8 +107,8 @@ class HomeHeader extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
-                    image: DecorationImage(
-                      image: NetworkImage(isGuest ? 'https://storage.googleapis.com/banani-avatars/avatar/male/18-25/European/4' : 'https://storage.googleapis.com/banani-avatars/avatar/female/18-25/Asian/4'),
+                    image: const DecorationImage(
+                      image: NetworkImage('https://storage.googleapis.com/banani-avatars/avatar/male/18-25/European/4'),
                       fit: BoxFit.cover,
                     ),
                     boxShadow: [
@@ -121,7 +122,7 @@ class HomeHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  isGuest ? 'Hello, Guest' : 'Hello, Aisha',
+                  isGuest ? 'Hello, Guest' : userName ?? 'Hello, User',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,

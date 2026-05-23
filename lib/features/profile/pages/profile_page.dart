@@ -1,11 +1,39 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/guest_bottom_nav.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../routes/app_routes.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  bool _isGuest = true;
+  String? _userName;
+  String? _userEmail;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final user = await StorageService.getUser();
+    final tokens = (await StorageService.getAccessToken()) != null;
+    if (!mounted) return;
+    setState(() {
+      _isGuest = user == null || !tokens;
+      _userName = user?.fullName;
+      _userEmail = user?.email;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,8 +61,8 @@ class ProfilePage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Guest Card
-                        _buildGuestCard(context),
+                        // Profile Card
+                        _isGuest ? _buildGuestCard(context) : _buildUserCard(),
                         const SizedBox(height: 28),
 
                         // General Section Title
@@ -62,8 +90,37 @@ class ProfilePage extends StatelessWidget {
 
                         const SizedBox(height: 28),
 
+                        // Logged-in specific menu items
+                        if (!_isGuest) ...[
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.edit_outlined,
+                            label: 'Edit Profile',
+                            onTap: () => Navigator.pushNamed(context, AppRoutes.editProfile),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.lock_outline_rounded,
+                            label: 'Change Password',
+                            onTap: () => Navigator.pushNamed(context, AppRoutes.changePassword),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.logout_rounded,
+                            label: 'Logout',
+                            onTap: () async {
+                              await StorageService.clear();
+                              if (!mounted) return;
+                              Navigator.pushNamedAndRemoveUntil(context, AppRoutes.cover, (route) => false);
+                            },
+                          ),
+                          const SizedBox(height: 28),
+                        ],
+
                         // Warning Banner
-                        _buildWarningBanner(),
+                        if (_isGuest) _buildWarningBanner(),
                       ],
                     ),
                   ),
@@ -73,7 +130,17 @@ class ProfilePage extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: const GuestBottomNav(currentIndex: 2),
+      bottomNavigationBar: _isGuest
+          ? const GuestBottomNav(currentIndex: 1)
+          : AppBottomNav(
+              currentIndex: 2,
+              onTap: (i) {
+                final routes = [AppRoutes.home, AppRoutes.history, AppRoutes.profile];
+                if (i < routes.length) {
+                  Navigator.pushNamedAndRemoveUntil(context, routes[i], (route) => false);
+                }
+              },
+            ),
     );
   }
 
@@ -96,7 +163,7 @@ class ProfilePage extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Guest Account',
+            _isGuest ? 'Guest Account' : 'Signed In',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -238,6 +305,94 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── USER CARD (LOGGED IN) ────────────────────────────────
+  Widget _buildUserCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: AppColors.primary.withOpacity(0.3),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.08),
+                blurRadius: 40,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Avatar
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.secondary],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.5),
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    (_userName ?? _userEmail ?? 'U')[0].toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Name
+              Text(
+                _userName ?? 'User',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.foreground,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Email
+              if (_userEmail != null)
+                Text(
+                  _userEmail!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
             ],
           ),
         ),

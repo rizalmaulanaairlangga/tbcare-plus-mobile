@@ -1,36 +1,83 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/services/guest_assessment_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/app_routes.dart';
 import '../../../core/widgets/home_header.dart';
-
 import '../../../core/widgets/guest_bottom_nav.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 
 enum RiskLevel { low, medium, high }
 
 class ResultPage extends StatefulWidget {
-  final RiskLevel initialRisk;
-  const ResultPage({super.key, this.initialRisk = RiskLevel.high});
+  const ResultPage({super.key});
 
   @override
   State<ResultPage> createState() => _ResultPageState();
 }
 
 class _ResultPageState extends State<ResultPage> {
-  late RiskLevel _currentRisk;
+  RiskLevel _currentRisk = RiskLevel.low;
+  int _percentage = 0;
+  bool _isGuest = true;
+  String? _userName;
+  Map<String, dynamic>? _assessmentData;
+  bool _loaded = false;
 
   @override
   void initState() {
     super.initState();
-    _currentRisk = widget.initialRisk;
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      // Primary: load from local storage (saved right before navigation)
+      final saved = await GuestAssessmentService.get();
+      if (saved != null) {
+        _currentRisk = _parseRisk(saved['riskLevel'] as String?);
+        _percentage = (saved['percentage'] as int?) ?? 0;
+        _assessmentData = saved;
+      }
+
+      // Secondary: override with route arguments if present
+      final raw = ModalRoute.of(context)?.settings.arguments;
+      if (raw is Map) {
+        _currentRisk = raw['riskLevel'] as RiskLevel;
+        _percentage = (raw['percentage'] as int?) ?? _percentage;
+        _isGuest = (raw['isGuest'] as bool?) ?? true;
+      }
+
+      final user = await StorageService.getUser();
+      if (!mounted) return;
+      setState(() {
+        _isGuest = user == null;
+        _userName = user?.fullName;
+        _loaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loaded = true);
+    }
+  }
+
+  RiskLevel _parseRisk(String? name) {
+    switch (name) {
+      case 'high':
+        return RiskLevel.high;
+      case 'medium':
+        return RiskLevel.medium;
+      default:
+        return RiskLevel.low;
+    }
   }
 
   Map<String, dynamic> _getRiskData() {
     switch (_currentRisk) {
       case RiskLevel.low:
         return {
-          'percentage': 15,
+          'percentage': _percentage,
           'title': 'Low Risk',
           'subtitle': 'You show low indications of TBC',
           'description': 'Your current symptoms do not strongly indicate TBC. Stay healthy and monitor your condition.',
@@ -40,7 +87,7 @@ class _ResultPageState extends State<ResultPage> {
         };
       case RiskLevel.medium:
         return {
-          'percentage': 55,
+          'percentage': _percentage,
           'title': 'Medium Risk',
           'subtitle': 'Some symptoms require attention',
           'description': 'You show some symptoms related to TBC. It is recommended to continue with a more detailed assessment.',
@@ -50,7 +97,7 @@ class _ResultPageState extends State<ResultPage> {
         };
       case RiskLevel.high:
         return {
-          'percentage': 85,
+          'percentage': _percentage,
           'title': 'High Risk',
           'subtitle': 'Strong indication of TBC symptoms',
           'description': 'Your symptoms strongly indicate potential TBC. Please proceed with a full assessment and seek medical attention.',
@@ -63,6 +110,13 @@ class _ResultPageState extends State<ResultPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_loaded) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final data = _getRiskData();
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
@@ -71,15 +125,11 @@ class _ResultPageState extends State<ResultPage> {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Background Auras
           _buildScatteredAuras(screenWidth, screenHeight, data['auraColor']),
-
-          // Main Content
           SafeArea(
             child: Column(
               children: [
-                const HomeHeader(),
-                
+                HomeHeader(isGuest: _isGuest, userName: _userName),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
@@ -106,9 +156,7 @@ class _ResultPageState extends State<ResultPage> {
                     ],
                   ),
                 ),
-                
                 const SizedBox(height: 24),
-
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -118,44 +166,26 @@ class _ResultPageState extends State<ResultPage> {
               ],
             ),
           ),
-          
-          // Debug Toggle
-          Positioned(
-            top: 100,
-            left: 20,
-            child: Row(
-              children: [
-                _buildDebugChip('L', RiskLevel.low),
-                _buildDebugChip('M', RiskLevel.medium),
-                _buildDebugChip('H', RiskLevel.high),
-              ],
-            ),
-          ),
         ],
       ),
-      bottomNavigationBar: const GuestBottomNav(currentIndex: -1),
-    );
-  }
-
-  Widget _buildDebugChip(String label, RiskLevel level) {
-    bool isSelected = _currentRisk == level;
-    return GestureDetector(
-      onTap: () => setState(() => _currentRisk = level),
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.foreground : Colors.white.withOpacity(0.5),
-          shape: BoxShape.circle,
-        ),
-        child: Text(label, style: TextStyle(color: isSelected ? Colors.white : AppColors.foreground, fontSize: 10, fontWeight: FontWeight.bold)),
-      ),
+      bottomNavigationBar: _isGuest
+          ? const GuestBottomNav(currentIndex: -1)
+          : AppBottomNav(
+              currentIndex: 0,
+              onTap: (i) {
+                final routes = [AppRoutes.home, AppRoutes.history, AppRoutes.profile];
+                if (i < routes.length) {
+                  Navigator.pushNamedAndRemoveUntil(context, routes[i], (route) => false);
+                }
+              },
+            ),
     );
   }
 
   Widget _buildResultCard(Map<String, dynamic> data) {
     Color mainColor = data['color'];
-    
+    final pct = data['percentage'] as int;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(40),
       child: BackdropFilter(
@@ -166,11 +196,10 @@ class _ResultPageState extends State<ResultPage> {
             borderRadius: BorderRadius.circular(40),
             border: Border.all(color: mainColor.withOpacity(0.2)),
           ),
-          child: SingleChildScrollView( // Fixes overflow and makes it scrollable
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                // Gauge
                 SizedBox(
                   height: 140,
                   width: 240,
@@ -180,7 +209,7 @@ class _ResultPageState extends State<ResultPage> {
                       CustomPaint(
                         size: const Size(240, 120),
                         painter: GaugePainter(
-                          percentage: data['percentage'] / 100,
+                          percentage: pct / 100,
                           color: mainColor,
                         ),
                       ),
@@ -190,7 +219,7 @@ class _ResultPageState extends State<ResultPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              '${data['percentage']}%',
+                              '$pct%',
                               style: const TextStyle(
                                 fontSize: 44,
                                 fontWeight: FontWeight.w900,
@@ -214,10 +243,7 @@ class _ResultPageState extends State<ResultPage> {
                     ],
                   ),
                 ),
-                
                 const SizedBox(height: 32),
-
-                // Title & Icon
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -243,10 +269,7 @@ class _ResultPageState extends State<ResultPage> {
                     color: mainColor,
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // Summary Box
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -265,10 +288,7 @@ class _ResultPageState extends State<ResultPage> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 32),
-
-                // Buttons
                 if (_currentRisk != RiskLevel.low) ...[
                   _buildButton(
                     'Continue Full Assessment',
@@ -278,17 +298,7 @@ class _ResultPageState extends State<ResultPage> {
                     onPressed: () => Navigator.pushNamed(context, AppRoutes.fullAssessment),
                   ),
                   const SizedBox(height: 12),
-                  // _buildButton(
-                  //   'View Symptom Insights',
-                  //   Colors.white,
-                  //   mainColor,
-                  //   false,
-                  //   borderColor: mainColor.withOpacity(0.2),
-                  //   onPressed: () => Navigator.pushNamed(context, AppRoutes.symptomInfo),
-                  // ),
-                  // const SizedBox(height: 12),
                 ],
-                
                 _buildButton(
                   _currentRisk == RiskLevel.low ? 'Back to Home' : 'Find Nearby Clinic',
                   _currentRisk == RiskLevel.low ? Colors.white : Colors.transparent,
@@ -313,13 +323,15 @@ class _ResultPageState extends State<ResultPage> {
         borderRadius: BorderRadius.circular(20),
         color: bgColor,
         border: borderColor != null ? Border.all(color: borderColor) : null,
-        boxShadow: hasShadow ? [
-          BoxShadow(
-            color: bgColor.withOpacity(0.4),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          )
-        ] : null,
+        boxShadow: hasShadow
+            ? [
+                BoxShadow(
+                  color: bgColor.withOpacity(0.4),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                )
+              ]
+            : null,
       ),
       child: ElevatedButton(
         onPressed: onPressed ?? () {},
@@ -339,7 +351,6 @@ class _ResultPageState extends State<ResultPage> {
       ),
     );
   }
-
 
   Widget _buildScatteredAuras(double sw, double sh, Color color) {
     return Stack(

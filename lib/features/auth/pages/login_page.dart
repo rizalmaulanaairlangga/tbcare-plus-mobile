@@ -408,10 +408,10 @@ class _LoginPageState extends State<LoginPage> {
   }) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(
+      hintStyle: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w500,
-        color: AppColors.mutedForeground,
+        color: AppColors.mutedForeground.withOpacity(0.5),
       ),
       prefixIcon: Icon(icon, color: AppColors.primary.withOpacity(0.7), size: 20),
       suffixIcon: suffixIcon,

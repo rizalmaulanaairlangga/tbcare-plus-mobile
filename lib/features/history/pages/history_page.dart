@@ -1,12 +1,37 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/home_header.dart';
 import '../../../core/widgets/guest_bottom_nav.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../routes/app_routes.dart';
 
-class HistoryPage extends StatelessWidget {
+class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
+
+  @override
+  State<HistoryPage> createState() => _HistoryPageState();
+}
+
+class _HistoryPageState extends State<HistoryPage> {
+  bool _isGuest = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAuth();
+  }
+
+  Future<void> _loadAuth() async {
+    final loggedIn = await StorageService.isLoggedIn();
+    if (!mounted) return;
+    if (!loggedIn) {
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.cover, (route) => false);
+      return;
+    }
+    setState(() => _isGuest = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +86,17 @@ class HistoryPage extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: const GuestBottomNav(currentIndex: 1),
+      bottomNavigationBar: _isGuest
+          ? const GuestBottomNav(currentIndex: 1)
+          : AppBottomNav(
+              currentIndex: 1,
+              onTap: (i) {
+                final routes = [AppRoutes.home, AppRoutes.history, AppRoutes.profile];
+                if (i < routes.length) {
+                  Navigator.pushNamedAndRemoveUntil(context, routes[i], (route) => false);
+                }
+              },
+            ),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../routes/app_routes.dart';
@@ -48,6 +49,17 @@ class _CoverPageState extends State<CoverPage> with TickerProviderStateMixin {
         _entranceController.forward();
       }
     });
+
+    // Auto-redirect to home if already logged in
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final loggedIn = await StorageService.isLoggedIn();
+    if (!mounted) return;
+    if (loggedIn) {
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.home, (route) => false);
+    }
   }
 
   @override
@@ -317,7 +329,7 @@ class _CoverPageState extends State<CoverPage> with TickerProviderStateMixin {
           width: double.infinity,
           height: 58,
           child: ElevatedButton(
-            onPressed: () => _dragController.forward(),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.login),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(

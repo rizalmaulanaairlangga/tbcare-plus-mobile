@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/services/auth_api_service.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../routes/app_routes.dart';
@@ -44,23 +43,18 @@ class _RegisterPageState extends State<RegisterPage> {
     });
 
     try {
-      final result = await AuthApiService.register(
+      await AuthApiService.register(
         email:    _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
         fullName: _fullNameCtrl.text.trim(),
       );
 
-      await StorageService.saveTokens(
-        accessToken:  result.accessToken,
-        refreshToken: result.refreshToken,
-      );
-      await StorageService.saveUser(result.user);
-
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
-        AppRoutes.home,
+        AppRoutes.login,
         (route) => false,
+        arguments: 'Akun berhasil dibuat! Silakan login.',
       );
     } catch (e) {
       setState(() {

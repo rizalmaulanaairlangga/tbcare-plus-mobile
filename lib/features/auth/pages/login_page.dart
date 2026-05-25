@@ -21,6 +21,20 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword   = true;
   bool _isLoading         = false;
   String? _errorMessage;
+  String? _successMessage;
+  bool _routeArgRead      = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeArgRead) {
+      _routeArgRead = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is String && args.isNotEmpty) {
+        _successMessage = args;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -173,6 +187,12 @@ class _LoginPageState extends State<LoginPage> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      // Success Banner (after registration)
+                                      if (_successMessage != null) ...[
+                                        _buildSuccessBanner(_successMessage!),
+                                        const SizedBox(height: 20),
+                                      ],
+
                                       // Error Banner
                                       if (_errorMessage != null) ...[
                                         _buildErrorBanner(_errorMessage!),
@@ -285,6 +305,39 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // ── Widgets ──────────────────────────────────────────────────────────
+
+  Widget _buildSuccessBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade300),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle_outline, color: Colors.green.shade700, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.green.shade800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => setState(() => _successMessage = null),
+            child: Icon(Icons.close, color: Colors.green.shade700, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildErrorBanner(String message) {
     return Container(

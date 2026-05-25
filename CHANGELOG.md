@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Close notification button (X) on the login page success banner after successful account creation.
 - Functional **Registration & Login Logic Endpoints Integration**:
   - Converted `LoginPage` from a static mock to a fully functional `StatefulWidget` handling form inputs, controller disposal, login API submission, local storage persistence, and home page redirection.
   - Converted `RegisterPage` to a functional `StatefulWidget` supporting full name, email, password, confirm password validation, loading indicators, error banners, and automatic authentication on success.
@@ -21,6 +22,9 @@ All notable changes to this project will be documented in this file.
 - Navigation route for `history-detail`.
 
 ### Fixed
+- Android internet connectivity by adding `INTERNET` permission and cleartext traffic support in `AndroidManifest.xml`.
+- Android emulator network connection by configuring dynamic localhost/10.0.2.2 baseUrl resolving in `app_constants.dart`.
+- Registration flow redirect: modified register page to push the user to the login screen with a success notification instead of automatically logging them in.
 - Corrected the backend API port in `AppConstants` from `5000` to `5181` to match the actual ASP.NET local server, resolving connection timeouts.
 - Synced email format validation in `RegisterPage` and `LoginPage` to require both `@` and `.` characters, preventing invalid formats from passing locally.
 

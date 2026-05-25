@@ -46,7 +46,7 @@ class _RegisterPageState extends State<RegisterPage> {
       await AuthApiService.register(
         email:    _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
-        fullName: _fullNameCtrl.text.trim(),
+        nickname: _fullNameCtrl.text.trim(),
       );
 
       if (!mounted) return;
@@ -160,16 +160,16 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 20),
               ],
 
-              _buildLabel('Full Name'),
+              _buildLabel('Nickname'),
               const SizedBox(height: 8),
               _buildTextFormField(
                 controller: _fullNameCtrl,
-                hint: 'Enter your full name',
-                icon: Icons.person_outline,
+                hint: 'Enter your nickname',
+                icon: Icons.badge_outlined,
                 textInputAction: TextInputAction.next,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty)
-                    return 'Nama lengkap tidak boleh kosong';
+                    return 'Nickname tidak boleh kosong';
                   return null;
                 },
               ),

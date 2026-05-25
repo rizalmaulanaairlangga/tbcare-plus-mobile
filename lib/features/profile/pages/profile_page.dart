@@ -33,6 +33,20 @@ class _ProfilePageState extends State<ProfilePage> {
       _userName = user?.fullName;
       _userEmail = user?.email;
     });
+
+    if (user != null && tokens) {
+      try {
+        final updatedUser = await AuthApiService.fetchCurrentUser();
+        if (mounted && (updatedUser.fullName != _userName || updatedUser.email != _userEmail)) {
+          setState(() {
+            _userName = updatedUser.fullName;
+            _userEmail = updatedUser.email;
+          });
+        }
+      } catch (e) {
+        // Silently fail background sync (e.g. if offline)
+      }
+    }
   }
 
   @override

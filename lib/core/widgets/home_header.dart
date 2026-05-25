@@ -122,13 +122,16 @@ class HomeHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  isGuest ? 'Hello, Guest' : userName ?? 'Hello, User',
+                  isGuest
+                      ? 'Hello, User'
+                      : 'Hello, ${(userName != null && userName!.isNotEmpty) ? userName! : 'User'}',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: AppColors.mutedForeground,
                   ),
                 ),
+
               ],
             ),
           ),

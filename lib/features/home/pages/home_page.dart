@@ -88,6 +88,19 @@ class _HomePageState extends State<HomePage> {
       _isGuest = user == null;
       _userName = user?.fullName;
     });
+
+    if (user != null) {
+      try {
+        final updatedUser = await AuthApiService.fetchCurrentUser();
+        if (mounted && updatedUser.fullName != _userName) {
+          setState(() {
+            _userName = updatedUser.fullName;
+          });
+        }
+      } catch (e) {
+        // Silently fail background sync (e.g. if offline)
+      }
+    }
   }
 
   Future<void> _loadConfig() async {

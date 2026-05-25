@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 - Scattered aura animations and refined risk level cards on the **Cover Page**.
 - Assets directory registration for `assets/images/` in `pubspec.yaml`.
 - Navigation route for `history-detail`.
+- `fetchCurrentUser()` method in `AuthApiService` to call `GET /api/v1/auth/me` and sync the user profile from the backend on app load.
+- Local **client-side diagnosis calculation** in `FullAssessmentPage` using the saturation formula `1 - exp(-k * sum)` — the app no longer submits answers to the server for diagnosis.
+- Background user profile sync on `HomePage` and `ProfilePage` init to keep local nickname in sync with the backend.
 
 ### Fixed
 - Android internet connectivity by adding `INTERNET` permission and cleartext traffic support in `AndroidManifest.xml`.
@@ -27,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - Registration flow redirect: modified register page to push the user to the login screen with a success notification instead of automatically logging them in.
 - Corrected the backend API port in `AppConstants` from `5000` to `5181` to match the actual ASP.NET local server, resolving connection timeouts.
 - Synced email format validation in `RegisterPage` and `LoginPage` to require both `@` and `.` characters, preventing invalid formats from passing locally.
+- **Header greeting** now displays "Hello, (Nickname)" using the user's display name from Supabase metadata, instead of the static "Hi, User" placeholder.
 
 ### Changed
 - Increased HTTP connection timeout to 30s in `AuthApiService` and added explicit `TimeoutException` handling for friendlier connection error messages.
@@ -34,6 +38,9 @@ All notable changes to this project will be documented in this file.
 - Updated **Profile Page** navigation index for consistency.
 - Simplified **Profile Page** UI by removing unnecessary decorative elements.
 - Updated route configuration to handle arguments for history details.
+- `RegisterPage` now uses a **"Nickname"** field instead of "Full Name"; the nickname value is sent as `display_name` in Supabase user metadata.
+- `AppConstants.usersMe` endpoint updated to `/api/v1/auth/me` to match the new backend route.
+- `HomeHeader` greeting updated to read nickname from `StorageService` and display "Hello, (Nickname)".
 
 ### Removed
 - `Age` and `Gender` fields from `RegisterPage`, `AuthApiService.register()`, and `UserModel` — registration now only collects full name, email, and password.
@@ -41,3 +48,5 @@ All notable changes to this project will be documented in this file.
 - Custom slide transitions in HomeHeader and GuestBottomNav.
 - Redundant "View Symptom Insights" button from Result Page (integrated into history).
 - Decorative blur circles in Profile Page for a cleaner look.
+- `submitAssessment()` method from `AssessmentApiService` — assessment answers are no longer sent to the backend; diagnosis is calculated locally.
+

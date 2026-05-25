@@ -13,9 +13,9 @@ class HistoryPage extends StatefulWidget {
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
-
 class _HistoryPageState extends State<HistoryPage> {
   bool _isGuest = true;
+  String? _userName;
 
   @override
   void initState() {
@@ -30,7 +30,12 @@ class _HistoryPageState extends State<HistoryPage> {
       Navigator.pushNamedAndRemoveUntil(context, AppRoutes.cover, (route) => false);
       return;
     }
-    setState(() => _isGuest = false);
+    final user = await StorageService.getUser();
+    if (!mounted) return;
+    setState(() {
+      _isGuest = false;
+      _userName = user?.fullName;
+    });
   }
 
   @override
@@ -49,7 +54,7 @@ class _HistoryPageState extends State<HistoryPage> {
           SafeArea(
             child: Column(
               children: [
-                const HomeHeader(isGuest: false), // Shows "Hello, Aisha"
+                HomeHeader(isGuest: _isGuest, userName: _userName),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),

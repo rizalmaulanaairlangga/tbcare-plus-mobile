@@ -19,35 +19,57 @@ class ResultPage extends StatefulWidget {
 }
 
 class _ResultPageState extends State<ResultPage> {
+  // --- Quick Check mode ---
   RiskLevel _currentRisk = RiskLevel.low;
   int _percentage = 0;
+  Map<String, dynamic>? _assessmentData;
+
+  // --- Full Assessment mode ---
+  bool _isFullAssessment = false;
+  Map<String, dynamic>? _fullResultData;
+
+  // --- Common ---
   bool _isGuest = true;
   String? _userName;
-  Map<String, dynamic>? _assessmentData;
   bool _loaded = false;
+
+  bool _argumentsLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_argumentsLoaded) {
+      _argumentsLoaded = true;
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {
     try {
-      // Primary: load from local storage (saved right before navigation)
-      final saved = await GuestAssessmentService.get();
-      if (saved != null) {
-        _currentRisk = _parseRisk(saved['riskLevel'] as String?);
-        _percentage = (saved['percentage'] as int?) ?? 0;
-        _assessmentData = saved;
-      }
-
-      // Secondary: override with route arguments if present
       final raw = ModalRoute.of(context)?.settings.arguments;
       if (raw is Map) {
-        _currentRisk = raw['riskLevel'] as RiskLevel;
-        _percentage = (raw['percentage'] as int?) ?? _percentage;
-        _isGuest = (raw['isGuest'] as bool?) ?? true;
+        _isFullAssessment = (raw['isFullAssessment'] as bool?) ?? false;
+        if (_isFullAssessment) {
+          _fullResultData = raw['result'] as Map<String, dynamic>?;
+          _isGuest = (raw['isGuest'] as bool?) ?? false;
+        } else {
+          _currentRisk = raw['riskLevel'] as RiskLevel? ?? RiskLevel.low;
+          _percentage = (raw['percentage'] as int?) ?? _percentage;
+          _isGuest = (raw['isGuest'] as bool?) ?? true;
+        }
+      } else {
+        // Fallback: load from local storage (guest quick check)
+        final saved = await GuestAssessmentService.get();
+        if (saved != null) {
+          _currentRisk = _parseRisk(saved['riskLevel'] as String?);
+          _percentage = (saved['percentage'] as int?) ?? 0;
+          _assessmentData = saved;
+        }
       }
 
       final user = await StorageService.getUser();
@@ -117,15 +139,19 @@ class _ResultPageState extends State<ResultPage> {
       );
     }
 
-    final data = _getRiskData();
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
+
+    // For full assessment, use a neutral aura
+    final auraColor = _isFullAssessment
+        ? AppColors.primary.withOpacity(0.08)
+        : (_getRiskData()['auraColor'] as Color);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          _buildScatteredAuras(screenWidth, screenHeight, data['auraColor']),
+          _buildScatteredAuras(screenWidth, screenHeight, auraColor),
           SafeArea(
             child: Column(
               children: [
@@ -134,9 +160,9 @@ class _ResultPageState extends State<ResultPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     children: [
-                      const Text(
-                        'Screening Result',
-                        style: TextStyle(
+                      Text(
+                        _isFullAssessment ? 'Full Assessment Result' : 'Screening Result',
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
                           color: AppColors.foreground,
@@ -144,10 +170,12 @@ class _ResultPageState extends State<ResultPage> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Based on your answers, here is your risk assessment.',
+                      Text(
+                        _isFullAssessment
+                            ? 'Your comprehensive TB risk analysis across all categories.'
+                            : 'Based on your answers, here is your risk assessment.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                           color: AppColors.mutedForeground,
@@ -160,7 +188,9 @@ class _ResultPageState extends State<ResultPage> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                    child: _buildResultCard(data),
+                    child: _isFullAssessment
+                        ? _buildFullResultList()
+                        : _buildResultCard(_getRiskData()),
                   ),
                 ),
               ],
@@ -182,6 +212,283 @@ class _ResultPageState extends State<ResultPage> {
     );
   }
 
+  // ─── FULL ASSESSMENT MULTI-CATEGORY RESULT ────────────────
+  Widget _buildFullResultList() {
+    if (_fullResultData == null) {
+      return const Center(child: Text('No result data found.'));
+    }
+
+    final resultsList = _fullResultData!['results'] as List<dynamic>? ?? [];
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            itemCount: resultsList.length,
+            itemBuilder: (context, index) {
+              final item = resultsList[index] as Map<String, dynamic>;
+              final tbTypeName = item['tbTypeName'] as String? ?? 'Unknown';
+              final totalScore = (item['totalScore'] as num?)?.toDouble() ?? 0.0;
+              final scorePercent = totalScore.round();
+              final riskLevelMap = item['riskLevel'] as Map<String, dynamic>?;
+              final riskTitle = riskLevelMap?['title'] as String? ?? 'Low Risk';
+              final riskCode = (riskLevelMap?['code'] as String? ?? 'LOW').toUpperCase();
+              final recommendation = riskLevelMap?['recommendation'] as String? ?? '';
+              final symptomDetails = item['symptomDetails'] as List<dynamic>? ?? [];
+
+              // Only show symptoms where the user answered yes (cfValue > 0)
+              final positiveSymptoms = symptomDetails
+                  .where((s) => ((s['cfValue'] as num?)?.toDouble() ?? 0.0) > 0.0)
+                  .toList();
+
+              // Risk-coded colors
+              Color themeColor = AppColors.primary;
+              IconData riskIcon = Icons.check_circle_outline_rounded;
+              if (riskCode == 'HIGH') {
+                themeColor = AppColors.destructive;
+                riskIcon = Icons.error_outline_rounded;
+              } else if (riskCode == 'MEDIUM') {
+                themeColor = AppColors.warning;
+                riskIcon = Icons.warning_amber_rounded;
+              }
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.82),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: themeColor.withOpacity(0.2), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: themeColor.withOpacity(0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header row: TB Type name + risk badge
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  tbTypeName,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.foreground,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: themeColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(riskIcon, color: themeColor, size: 13),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$scorePercent%',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                        color: themeColor,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            riskTitle,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: themeColor,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Score progress bar
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Stack(
+                              children: [
+                                Container(
+                                  height: 6,
+                                  width: double.infinity,
+                                  color: AppColors.muted.withOpacity(0.25),
+                                ),
+                                FractionallySizedBox(
+                                  widthFactor: (totalScore / 100).clamp(0.0, 1.0),
+                                  child: Container(
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [themeColor.withOpacity(0.7), themeColor],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Detected symptoms chips
+                          if (positiveSymptoms.isNotEmpty) ...[
+                            const Text(
+                              'GEJALA TERDETEKSI',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.mutedForeground,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: positiveSymptoms.map((s) {
+                                final name = s['symptomName'] as String? ?? '';
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: themeColor.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: themeColor.withOpacity(0.12)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_rounded,
+                                          color: themeColor, size: 11),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          name,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 14),
+                          ] else ...[
+                            Row(
+                              children: [
+                                Icon(Icons.check_circle_outline_rounded,
+                                    color: AppColors.primary.withOpacity(0.6), size: 15),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Tidak ada gejala terdeteksi',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.mutedForeground.withOpacity(0.8),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+
+                          // Recommendation card
+                          if (recommendation.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: themeColor.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: themeColor.withOpacity(0.08)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.lightbulb_outline_rounded,
+                                      color: themeColor, size: 15),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      recommendation,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.foreground
+                                            .withOpacity(0.75),
+                                        height: 1.45,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                context, AppRoutes.home, (route) => false),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              elevation: 4,
+              shadowColor: AppColors.primary.withOpacity(0.4),
+            ),
+            child: const Text(
+              'Back to Home',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── QUICK CHECK SINGLE RESULT CARD ──────────────────────
   Widget _buildResultCard(Map<String, dynamic> data) {
     Color mainColor = data['color'];
     final pct = data['percentage'] as int;
@@ -228,7 +535,7 @@ class _ResultPageState extends State<ResultPage> {
                               ),
                             ),
                             Text(
-                              '${data['title'].split(' ')[0].toUpperCase()} RISK',
+                              '${(data['title'] as String).split(' ')[0].toUpperCase()} RISK',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
@@ -295,7 +602,8 @@ class _ResultPageState extends State<ResultPage> {
                     mainColor,
                     Colors.white,
                     true,
-                    onPressed: () => Navigator.pushNamed(context, AppRoutes.fullAssessment),
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.fullAssessment),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -304,8 +612,11 @@ class _ResultPageState extends State<ResultPage> {
                   _currentRisk == RiskLevel.low ? Colors.white : Colors.transparent,
                   mainColor,
                   false,
-                  borderColor: _currentRisk == RiskLevel.low ? mainColor.withOpacity(0.2) : Colors.transparent,
-                  onPressed: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.home, (route) => false),
+                  borderColor: _currentRisk == RiskLevel.low
+                      ? mainColor.withOpacity(0.2)
+                      : Colors.transparent,
+                  onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                      context, AppRoutes.home, (route) => false),
                 ),
               ],
             ),
@@ -315,7 +626,8 @@ class _ResultPageState extends State<ResultPage> {
     );
   }
 
-  Widget _buildButton(String text, Color bgColor, Color textColor, bool hasShadow, {Color? borderColor, VoidCallback? onPressed}) {
+  Widget _buildButton(String text, Color bgColor, Color textColor, bool hasShadow,
+      {Color? borderColor, VoidCallback? onPressed}) {
     return Container(
       width: double.infinity,
       height: 58,
@@ -338,7 +650,8 @@ class _ResultPageState extends State<ResultPage> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
         child: Text(
           text,
@@ -355,9 +668,18 @@ class _ResultPageState extends State<ResultPage> {
   Widget _buildScatteredAuras(double sw, double sh, Color color) {
     return Stack(
       children: [
-        Positioned(top: -50, right: -50, child: _buildAura(150, color.withOpacity(0.2))),
-        Positioned(top: sh * 0.3, left: -100, child: _buildAura(180, color.withOpacity(0.1))),
-        Positioned(bottom: 100, right: 20, child: _buildAura(100, AppColors.muted.withOpacity(0.2))),
+        Positioned(
+            top: -50,
+            right: -50,
+            child: _buildAura(150, color.withOpacity(0.2))),
+        Positioned(
+            top: sh * 0.3,
+            left: -100,
+            child: _buildAura(180, color.withOpacity(0.1))),
+        Positioned(
+            bottom: 100,
+            right: 20,
+            child: _buildAura(100, AppColors.muted.withOpacity(0.2))),
       ],
     );
   }
@@ -380,6 +702,7 @@ class _ResultPageState extends State<ResultPage> {
   }
 }
 
+// ─── GAUGE PAINTER ─────────────────────────────────────────
 class GaugePainter extends CustomPainter {
   final double percentage;
   final Color color;

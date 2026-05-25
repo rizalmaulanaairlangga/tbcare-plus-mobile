@@ -12,8 +12,9 @@ class AppConstants {
   // ── API Paths ────────────────────────────────────────────────────────
   static final String authRegister = '$baseUrl/api/v1/auth/register';
   static final String authLogin    = '$baseUrl/api/v1/auth/login';
-  static final String usersMe      = '$baseUrl/api/v1/users/me';
+  static final String usersMe      = '$baseUrl/api/v1/auth/me';
   static final String quickCheckConfig = '$baseUrl/api/v1/assessment/quick-check-config';
+  static final String fullAssessmentConfig = '$baseUrl/api/v1/assessment/full-assessment-config';
 
   // ── SharedPreferences Keys ───────────────────────────────────────────
   static const String keyAccessToken  = 'access_token';

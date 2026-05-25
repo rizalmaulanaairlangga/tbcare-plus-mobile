@@ -16,12 +16,12 @@ class AuthApiService {
   static Future<AuthResponse> register({
     required String email,
     required String password,
-    String? fullName,
+    String? nickname,
   }) async {
     final body = jsonEncode({
       'email':    email,
       'password': password,
-      if (fullName != null && fullName.isNotEmpty) 'fullName': fullName,
+      if (nickname != null && nickname.isNotEmpty) 'nickname': nickname,
     });
 
     try {
@@ -54,6 +54,45 @@ class AuthApiService {
           .timeout(const Duration(seconds: 30));
 
       return _handleAuthResponse(response);
+    } on TimeoutException {
+      throw Exception('Server tidak merespons. Pastikan backend sedang berjalan.');
+    } on SocketException {
+      throw Exception('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
+    } on HttpException {
+      throw Exception('Terjadi kesalahan jaringan. Coba lagi.');
+    } on FormatException {
+      throw Exception('Respons server tidak valid.');
+    }
+  }
+
+  // ── Fetch Current User (Profile) ──────────────────────────────────────
+  static Future<UserModel> fetchCurrentUser() async {
+    final token = await StorageService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Token tidak ditemukan. Silakan login kembali.');
+    }
+
+    final headers = {
+      ..._headers,
+      'Authorization': 'Bearer $token',
+    };
+
+    try {
+      final response = await http
+          .get(Uri.parse(AppConstants.usersMe), headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        final data = json['data'] as Map<String, dynamic>;
+        final user = UserModel.fromJson(data);
+        await StorageService.saveUser(user); // Cache updated user profile locally
+        return user;
+      }
+
+      final message = json['message'] as String? ?? 'Gagal memuat profil.';
+      throw Exception(message);
     } on TimeoutException {
       throw Exception('Server tidak merespons. Pastikan backend sedang berjalan.');
     } on SocketException {

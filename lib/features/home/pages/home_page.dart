@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/auth_api_service.dart';
 import '../../../core/services/guest_assessment_service.dart';
 import '../../../core/services/assessment_api_service.dart';
 import '../../../core/models/assessment_config_models.dart';

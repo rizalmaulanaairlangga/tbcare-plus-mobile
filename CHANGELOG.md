@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - Background user profile sync on `HomePage` and `ProfilePage` init to keep local nickname in sync with the backend.
 
 ### Fixed
+- Fixed compile-time errors in `ProfilePage` and `HomePage` by importing `AuthApiService`, and in `FullAssessmentPage` by importing `dart:math` for `exp`.
 - Android internet connectivity by adding `INTERNET` permission and cleartext traffic support in `AndroidManifest.xml`.
 - Android emulator network connection by configuring dynamic localhost/10.0.2.2 baseUrl resolving in `app_constants.dart`.
 - Registration flow redirect: modified register page to push the user to the login screen with a success notification instead of automatically logging them in.

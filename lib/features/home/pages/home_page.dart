@@ -28,6 +28,12 @@ class _HomePageState extends State<HomePage> {
   bool _loadingConfig = true;
   Map<String, dynamic>? _storedResult;
   bool get _hasStoredResult => _storedResult != null;
+  
+  // For logged-in users: most recent assessment data
+  Map<String, dynamic>? _mostRecentAssessment;
+  bool _loadingMostRecentAssessment = false;
+  bool _hasCompletedFullAssessment = false;
+  bool _isMostRecentQuickAssessment = false;
 
   int get _answeredCount => _symptomStates.values.where((v) => v).length;
 
@@ -96,6 +102,29 @@ class _HomePageState extends State<HomePage> {
     _loadStoredResult();
   }
 
+  Future<void> _loadMostRecentAssessment() async {
+    if (_isGuest) return;
+    
+    setState(() => _loadingMostRecentAssessment = true);
+    
+    try {
+      final assessment = await AssessmentApiService.fetchMostRecentAssessment();
+      final hasFullAssessment = await AssessmentApiService.hasCompletedFullAssessment();
+      final isMostRecentQuick = await AssessmentApiService.isMostRecentQuickAssessment();
+      
+      if (!mounted) return;
+      setState(() {
+        _mostRecentAssessment = assessment;
+        _hasCompletedFullAssessment = hasFullAssessment;
+        _isMostRecentQuickAssessment = isMostRecentQuick;
+        _loadingMostRecentAssessment = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingMostRecentAssessment = false);
+    }
+  }
+
   Future<void> _loadStoredResult() async {
     if (!_isGuest) return;
     final saved = await GuestAssessmentService.get();
@@ -117,6 +146,12 @@ class _HomePageState extends State<HomePage> {
     // Guest→guest: try loading stored result
     if (_isGuest && wasGuest && _storedResult == null) {
       _loadStoredResult();
+    } else if (!_isGuest && wasGuest) {
+      // Guest→logged-in: load most recent assessment from backend
+      _loadMostRecentAssessment();
+    } else if (!_isGuest) {
+      // Still logged-in: load most recent assessment
+      _loadMostRecentAssessment();
     }
 
     if (user != null) {
@@ -164,8 +199,10 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                     child: Column(
                       children: [
-                        if (_loadingConfig)
+                        if (_loadingConfig || (_loadingMostRecentAssessment && !_isGuest))
                           _buildLoadingCard()
+                        else if (!_isGuest && _mostRecentAssessment != null)
+                          _buildLoggedInResultCard()
                         else if (_hasStoredResult && _isGuest)
                           _buildStoredResultCard()
                         else
@@ -441,14 +478,21 @@ class _HomePageState extends State<HomePage> {
             assessmentTypeId: 1,
             answers: answers,
           );
+          
+          // Reload the most recent assessment to show on dashboard
+          if (mounted) {
+            await _loadMostRecentAssessment();
+          }
         } catch (e) {
-          // Don't block navigation to result page if saving history fails, but log for debugging.
+          // Don't block navigation if saving history fails, but log for debugging.
           // ignore: avoid_print
           print('submitAssessment(quick) failed: $e');
         }
       }
+      return; // For logged-in users, stay on dashboard and show result
     }
 
+    // For guests, navigate to result page
     if (!mounted) return;
     Navigator.pushNamed(
       context,
@@ -685,6 +729,212 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  // ─── LOGGED-IN USER RESULT CARD ────────────────────────────────────
+  Widget _buildLoggedInResultCard() {
+    if (_mostRecentAssessment == null) {
+      return _buildAssessmentCard();
+    }
+
+    final assessment = _mostRecentAssessment!;
+    
+    // Extract the most recent result info
+    final assessmentTypeId = assessment['assessmentTypeId'] as int? ?? 1;
+    final assessmentTypeName = assessment['assessmentTypeName'] as String? ?? 'Assessment';
+    final riskLevelCode = assessment['riskLevelCode'] as String? ?? 'LOW';
+    final riskLevelTitle = assessment['riskLevelTitle'] as String? ?? 'Low Risk';
+    final totalScore = assessment['totalScore'] as num? ?? 0;
+    final pct = totalScore.toInt();
+    
+    // For full assessment, we might have multiple results - just show the main risk
+    String primaryRiskCode = riskLevelCode;
+    String primaryRiskTitle = riskLevelTitle;
+    double primaryScore = pct.toDouble();
+    
+    final color = _colorForRisk(primaryRiskCode);
+    final icon = _iconForRisk(primaryRiskCode);
+    final subtitle = _subtitleForRisk(primaryRiskCode);
+    final description = _descriptionForRisk(primaryRiskCode);
+    
+    final isFullAssessment = assessmentTypeId == 2;
+    final assessmentBadge = isFullAssessment ? 'Pemeriksaan Lengkap' : 'Cek Cepat';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: Colors.white.withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.1),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Title
+              const Text(
+                'Hasil Skrining Terakhir',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.foreground,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Pill badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: color.withOpacity(0.15)),
+                ),
+                child: Text(
+                  assessmentBadge,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // Gauge
+              SizedBox(
+                height: 140,
+                width: 240,
+                child: Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    CustomPaint(
+                      size: const Size(240, 120),
+                      painter: GaugePainter(percentage: pct / 100, color: color),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$pct%',
+                            style: const TextStyle(
+                              fontSize: 44,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.foreground,
+                              height: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Risk icon + title
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: color, size: 28),
+                  const SizedBox(width: 10),
+                  Text(
+                    primaryRiskTitle,
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Description
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: color.withOpacity(0.1)),
+                ),
+                child: Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.foreground,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // Buttons - different based on assessment type
+              if (!isFullAssessment && primaryRiskCode.toUpperCase() != 'LOW') ...[
+                _buildResultButton(
+                  'Lanjutkan Pemeriksaan Lengkap',
+                  color,
+                  Colors.white,
+                  true,
+                  onPressed: () => Navigator.pushNamed(context, AppRoutes.fullAssessment),
+                ),
+                const SizedBox(height: 12),
+              ],
+              _buildResultButton(
+                isFullAssessment ? 'Ulangi Pemeriksaan Lengkap' : 'Ulangi Cek Cepat',
+                color,
+                Colors.white,
+                true,
+                onPressed: () => _onRetakeAssessment(isFullAssessment),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onRetakeAssessment(bool isFullAssessment) async {
+    if (isFullAssessment) {
+      // Clear selected symptoms and go to full assessment
+      Navigator.pushNamed(context, AppRoutes.fullAssessment);
+    } else {
+      // Reset quick assessment form
+      setState(() {
+        if (_config != null) {
+          _symptomStates = {
+            for (final q in _config!.questions) q.symptomId: false,
+          };
+        }
+        _mostRecentAssessment = null;
+      });
+    }
   }
 
   void _retakeQuickCheck() {

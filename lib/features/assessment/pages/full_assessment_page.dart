@@ -178,28 +178,34 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
               })
           .toList();
 
-      if (_isLoggedIn) {
-        try {
-          await AssessmentApiService.submitAssessment(
-            assessmentTypeId: 2,
-            answers: answers,
-          );
-        } catch (e) {
-          // Don't block user flow if history save fails, but log for debugging.
-          // ignore: avoid_print
-          print('submitAssessment(full) failed: $e');
-        }
+      // Navigate to result page for both guest and logged-in users.
+      if (mounted) {
+        Navigator.pushNamed(
+          context,
+          AppRoutes.result,
+          arguments: {
+            'isFullAssessment': true,
+            'isGuest': !_isLoggedIn,
+            'result': result,
+          },
+        );
       }
-      
-      Navigator.pushNamed(
-        context,
-        AppRoutes.result,
-        arguments: {
-          'isFullAssessment': true,
-          'isGuest': !_isLoggedIn,
-          'result': result,
-        },
-      );
+
+      // Persist assessment answers to backend history in background for logged-in users.
+      if (_isLoggedIn) {
+        Future(() async {
+          try {
+            await AssessmentApiService.submitAssessment(
+              assessmentTypeId: 2,
+              answers: answers,
+            );
+          } catch (e) {
+            // Log failure but don't block user.
+            // ignore: avoid_print
+            print('submitAssessment(full) failed (background): $e');
+          }
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

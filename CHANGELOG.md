@@ -12,11 +12,17 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Quick assessment card tap selection**: Wrapped symptom answer cards in `GestureDetector` on the `HomePage` so tapping anywhere on the card toggles the selection — previously required tapping the small `Switch` widget directly.
 - **Double-entry prevention**: Backend integration ensures that if a logged-in user has already completed a full assessment, submitting a quick assessment will return the calculated result **without** saving a duplicate entry to the database.
+- **Null safety type casting**: Fixed dynamic map cast compile-time error in `AssessmentApiService.fetchMostRecentAssessment()` where nullable `bestRl` was casted without a safety downcast check.
 
 ### Changed
 - **Removed real-time percentage display** from quick assessment answer cards — score percentage is no longer shown while answering questions; results are only displayed on the results page after submission.
 - **`AssessmentApiService`**: All authenticated endpoints (`submitAssessment`, `fetchHistory`, `fetchHistorySessions`, `fetchHistorySessionDetail`, `fetchHistoryDetail`) now intercept `401` responses and trigger `SessionService.logoutAndRedirectToLogin()` automatically.
 - **`AuthApiService.fetchCurrentUser`**: Also intercepts `401` and delegates to `SessionService.logoutAndRedirectToLogin()`.
+- **History Detail Dropdowns & Symptom Items**:
+  - Restructured each TBC type card in the history detail screen to be a collapsible dropdown section using smooth `AnimatedCrossFade` transitions and arrow icon state toggle.
+  - Restricted the symptom card title to exactly 2 lines with ellipsis to prevent long names from cluttering.
+  - Eliminated the duplicated symptom name from the expanded child dropdown view so it is not repeated, displaying only the detailed description.
+  - Integrated `ExpansionTileController` to programmatically collapse the symptom expansion card when tapping the "Mengerti" button.
 
 
 

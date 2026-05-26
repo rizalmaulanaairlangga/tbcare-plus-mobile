@@ -199,4 +199,119 @@ class AssessmentApiService {
     }
     return null;
   }
+
+  /// Fetch the most recent assessment session for the current user
+  /// Returns a map with assessment type, risk level, and score info
+  /// Returns null if no assessment history exists
+  static Future<Map<String, dynamic>?> fetchMostRecentAssessment() async {
+    try {
+      final sessions = await fetchHistorySessions();
+      if (sessions.isEmpty) return null;
+
+      // Get the most recent session (already sorted in fetchHistorySessions)
+      final mostRecent = sessions.first;
+      final sessionKey = mostRecent['sessionKey'] as String?;
+      if (sessionKey == null) return null;
+
+      // Fetch the full details of this session
+      final details = await fetchHistorySessionDetail(sessionKey);
+      if (details == null) return null;
+
+      // The session detail contains an "items" list. Pick the first item
+      // and normalize keys so callers can read expected fields.
+      final items = details['items'] as List<dynamic>?;
+      if (items == null || items.isEmpty) return null;
+
+      // Helper to read either camelCase or PascalCase keys from payloads
+      dynamic getField(Map<String, dynamic> src, List<String> keys) {
+        for (final k in keys) {
+          if (src.containsKey(k)) return src[k];
+        }
+        return null;
+      }
+
+      int riskRankFromCode(String? code) {
+        final c = (code ?? '').toUpperCase();
+        if (c.contains('HIGH')) return 3;
+        if (c.contains('MEDIUM') || c.contains('MODERATE')) return 2;
+        return 1;
+      }
+
+      // Pick the best item: highest risk rank, then highest total score
+      Map<String, dynamic>? best;
+      for (final it in items) {
+        if (it is! Map) continue;
+        final m = Map<String, dynamic>.from(it.cast<String, dynamic>());
+        final rl = getField(m, ['riskLevel', 'riskLevel']) as Map<String, dynamic>? ??
+            getField(m, ['riskLevelMap', 'RiskLevel']) as Map<String, dynamic>?;
+        String? code;
+        if (rl is Map<String, dynamic>) {
+          code = getField(rl, ['code', 'Code', 'riskCode']) as String?;
+        }
+        final scoreVal = getField(m, ['totalScore', 'TotalScore', 'total_score']);
+        final score = (scoreVal is num) ? scoreVal.toDouble() : (double.tryParse(scoreVal?.toString() ?? '') ?? 0.0);
+
+        if (best == null) {
+          best = m;
+          continue;
+        }
+
+        final bestRl = getField(best, ['riskLevel', 'riskLevel']) as Map<String, dynamic>?;
+        String? bestCode;
+        if (bestRl is Map<String, dynamic>) {
+          bestCode = getField(bestRl, ['code', 'Code', 'riskCode']) as String?;
+        }
+        final bestScoreVal = getField(best, ['totalScore', 'TotalScore', 'total_score']);
+        final bestScore = (bestScoreVal is num) ? bestScoreVal.toDouble() : (double.tryParse(bestScoreVal?.toString() ?? '') ?? 0.0);
+
+        final r1 = riskRankFromCode(code);
+        final r2 = riskRankFromCode(bestCode);
+        if (r1 > r2 || (r1 == r2 && score > bestScore)) {
+          best = m;
+        }
+      }
+
+      final first = best ?? (items.first as Map<String, dynamic>);
+
+      final mapped = <String, dynamic>{
+        'sessionKey': details['sessionKey'] ?? mostRecent['sessionKey'],
+        'createdAt': details['createdAt'] ?? mostRecent['createdAt'],
+        'assessmentTypeId': getField(details, ['assessmentTypeId', 'AssessmentTypeId']) ?? getField(first, ['assessmentTypeId', 'AssessmentTypeId']),
+        'assessmentTypeName': getField(details, ['assessmentTypeName', 'AssessmentTypeName']) ?? getField(first, ['assessmentTypeName', 'AssessmentTypeName']),
+        'riskLevelCode': getField(first, ['riskLevelCode', 'RiskLevelCode', 'riskCode']) ?? (getField(getField(first, ['riskLevel', 'riskLevel']) as Map<String, dynamic>? ?? <String,dynamic>{}, ['code', 'Code', 'riskCode']) ?? ''),
+        'riskLevelTitle': getField(first, ['riskLevelTitle', 'RiskLevelTitle', 'riskTitle']) ?? (getField(getField(first, ['riskLevel', 'riskLevel']) as Map<String, dynamic>? ?? <String,dynamic>{}, ['title', 'Title']) ?? ''),
+        'totalScore': getField(first, ['totalScore', 'TotalScore']) ?? 0,
+        'primaryTbTypeId': getField(first, ['primaryTbTypeId', 'PrimaryTbTypeId']) ?? getField(first, ['tbTypeId', 'TbTypeId']),
+        'primaryTbTypeName': getField(first, ['primaryTbTypeName', 'PrimaryTbTypeName']) ?? getField(first, ['tbTypeName', 'TbTypeName']),
+        'detailItem': first,
+      };
+
+      return mapped;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Check if user has completed a full assessment
+  static Future<bool> hasCompletedFullAssessment() async {
+    try {
+      final sessions = await fetchHistorySessions();
+      // Check if any session is a full assessment (assessmentTypeId == 2)
+      return sessions.any((s) => (s['assessmentTypeId'] as int?) == 2);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Check if the most recent assessment is a quick assessment (not full)
+  static Future<bool> isMostRecentQuickAssessment() async {
+    try {
+      final sessions = await fetchHistorySessions();
+      if (sessions.isEmpty) return false;
+      final mostRecent = sessions.first;
+      return (mostRecent['assessmentTypeId'] as int?) == 1;
+    } catch (_) {
+      return false;
+    }
+  }
 }

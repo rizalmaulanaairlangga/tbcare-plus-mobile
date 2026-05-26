@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../core/services/assessment_api_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/home_header.dart';
@@ -13,9 +15,12 @@ class HistoryPage extends StatefulWidget {
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
+
 class _HistoryPageState extends State<HistoryPage> {
   bool _isGuest = true;
   String? _userName;
+  List<Map<String, dynamic>> _historyItems = [];
+  bool _loading = true;
 
   bool _argumentsLoaded = false;
 
@@ -36,10 +41,10 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   void initState() {
     super.initState();
-    _loadAuth();
+    _loadAuthAndHistory();
   }
 
-  Future<void> _loadAuth() async {
+  Future<void> _loadAuthAndHistory() async {
     final loggedIn = await StorageService.isLoggedIn();
     if (!mounted) return;
     if (!loggedIn) {
@@ -52,6 +57,18 @@ class _HistoryPageState extends State<HistoryPage> {
       _isGuest = false;
       _userName = user?.fullName;
     });
+
+    try {
+      final history = await AssessmentApiService.fetchHistorySessions();
+      if (!mounted) return;
+      setState(() {
+        _historyItems = history;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -97,7 +114,14 @@ class _HistoryPageState extends State<HistoryPage> {
                         const SizedBox(height: 32),
 
                         // Timeline List
-                        _buildTimelineList(),
+                        _loading
+                            ? const Padding(
+                                padding: EdgeInsets.only(top: 60),
+                                child: Center(child: CircularProgressIndicator()),
+                              )
+                            : _historyItems.isEmpty
+                                ? _buildEmptyState()
+                                : _buildTimelineList(),
                       ],
                     ),
                   ),
@@ -126,57 +150,73 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  Widget _buildTimelineList() {
-    final historyItems = [
-      {
-        'date': 'HARI INI, 25 APR',
-        'riskLevel': 'Risiko Tinggi',
-        'percentage': '72%',
-        'type': 'PEMERIKSAAN LENGKAP',
-        'color': const Color(0xFFEF4444),
-        'icon': Icons.error_outline_rounded,
-      },
-      {
-        'date': 'APR 20, 2026',
-        'riskLevel': 'Risiko Sedang',
-        'percentage': '45%',
-        'type': 'PEMERIKSAAN CEPAT',
-        'color': const Color(0xFFF59E0B),
-        'icon': Icons.warning_amber_rounded,
-      },
-      {
-        'date': 'APR 10, 2026',
-        'riskLevel': 'Risiko Rendah',
-        'percentage': '12%',
-        'type': 'PEMERIKSAAN CEPAT',
-        'color': const Color(0xFF10B981),
-        'icon': Icons.check_circle_outline_rounded,
-      },
-      {
-        'date': 'MAR 28, 2026',
-        'riskLevel': 'Risiko Tinggi',
-        'percentage': '85%',
-        'type': 'PEMERIKSAAN LENGKAP',
-        'color': const Color(0xFFEF4444),
-        'icon': Icons.error_outline_rounded,
-      },
-      {
-        'date': 'MAR 15, 2026',
-        'riskLevel': 'Risiko Sedang',
-        'percentage': '55%',
-        'type': 'PEMERIKSAAN CEPAT',
-        'color': const Color(0xFFF59E0B),
-        'icon': Icons.warning_amber_rounded,
-      },
-    ];
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 60),
+        child: Column(
+          children: [
+            Icon(Icons.history_rounded, size: 80, color: AppColors.muted.withOpacity(0.5)),
+            const SizedBox(height: 16),
+            const Text(
+              'No History Found',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Your assessment results will appear here.',
+              style: TextStyle(color: AppColors.mutedForeground),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  Widget _buildTimelineList() {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: historyItems.length,
+      itemCount: _historyItems.length,
       itemBuilder: (context, index) {
-        final item = historyItems[index];
-        final isLast = index == historyItems.length - 1;
+        final raw = _historyItems[index];
+        
+        DateTime createdAt;
+        try {
+          createdAt = DateTime.parse(raw['createdAt']);
+        } catch (_) {
+          createdAt = DateTime.now();
+        }
+        
+        final dateStr = DateFormat('MMM dd, yyyy').format(createdAt).toUpperCase();
+        
+        final riskLevelCode = (raw['riskLevelCode'] ?? 'LOW').toString().toUpperCase();
+        Color color = AppColors.primary;
+        IconData icon = Icons.check_circle_outline_rounded;
+        String riskTitle = raw['riskLevelTitle'] ?? 'Low Risk';
+
+        if (riskLevelCode.contains('HIGH')) {
+          color = const Color(0xFFEF4444);
+          icon = Icons.error_outline_rounded;
+        } else if (riskLevelCode.contains('MEDIUM') || riskLevelCode.contains('MODERATE')) {
+          color = const Color(0xFFF59E0B);
+          icon = Icons.warning_amber_rounded;
+        } else {
+          color = const Color(0xFF10B981);
+          icon = Icons.check_circle_outline_rounded;
+        }
+
+        final item = {
+          'sessionKey': raw['sessionKey'],
+          'date': dateStr,
+          'riskLevel': riskTitle,
+          'riskLevelCode': riskLevelCode,
+          'percentage': '${(raw['totalScore'] as num).round()}%',
+          'tbType': (raw['primaryTbTypeName'] ?? '').toString(),
+          'type': (raw['assessmentTypeName'] ?? 'ASSESSMENT').toString().toUpperCase(),
+          'color': color,
+          'icon': icon,
+        };
 
         return IntrinsicHeight(
           child: Row(
@@ -302,7 +342,7 @@ class _HistoryPageState extends State<HistoryPage> {
                           ),
                         ),
                         Text(
-                          '${item['percentage']} Tingkat Risiko',
+                          '${item['tbType']} • ${item['percentage']}',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,

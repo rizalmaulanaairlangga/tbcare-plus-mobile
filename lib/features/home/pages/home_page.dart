@@ -33,17 +33,23 @@ class _HomePageState extends State<HomePage> {
 
   double get _combinedCF {
     if (_config == null || _answeredCount == 0) return 0;
-    double sum = 0;
+
+    // Quick check score is based on total questions and their weights:
+    // percentage = (sum(selected weights) / sum(all weights)) * 100
+    final totalWeight = _config!.questions.fold<double>(0, (acc, q) => acc + q.weight);
+    if (totalWeight <= 0) return 0;
+
+    double selectedWeight = 0;
     _symptomStates.forEach((symptomId, selected) {
-      if (selected) {
-        final q = _config!.questions.firstWhere(
-          (q) => q.symptomId == symptomId,
-          orElse: () => _config!.questions.first,
-        );
-        sum += q.weight;
-      }
+      if (!selected) return;
+      final q = _config!.questions.firstWhere(
+        (q) => q.symptomId == symptomId,
+        orElse: () => _config!.questions.first,
+      );
+      selectedWeight += q.weight;
     });
-    return 1 - exp(-_config!.saturationK * sum);
+
+    return selectedWeight / totalWeight;
   }
 
   int get _percentage => (_combinedCF * 100).round();
@@ -292,53 +298,57 @@ class _HomePageState extends State<HomePage> {
     final isSelected = _symptomStates[q.symptomId] ?? false;
     final icon = _symptomIcons[q.symptomId] ?? Icons.help_outline;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isSelected ? AppColors.primary.withOpacity(0.12) : Colors.white.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isSelected ? AppColors.primary.withOpacity(0.3) : Colors.white,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (isSelected ? AppColors.primary : AppColors.primary).withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () => setState(() => _symptomStates[q.symptomId] = !isSelected),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary.withOpacity(0.12) : Colors.white.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isSelected ? AppColors.primary.withOpacity(0.3) : Colors.white,
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: (isSelected ? AppColors.primary : AppColors.primary).withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
-            child: Icon(icon, color: isSelected ? AppColors.primary : AppColors.mutedForeground, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              q.questionText,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? AppColors.foreground : AppColors.mutedForeground,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: isSelected ? AppColors.primary : AppColors.mutedForeground, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                q.questionText,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? AppColors.foreground : AppColors.mutedForeground,
+                ),
               ),
             ),
-          ),
-          Switch(
-            value: isSelected,
-            onChanged: (val) => setState(() => _symptomStates[q.symptomId] = val),
-            activeThumbColor: AppColors.primary,
-            activeTrackColor: AppColors.primary.withOpacity(0.2),
-            inactiveThumbColor: Colors.white,
-            inactiveTrackColor: Colors.grey.withOpacity(0.1),
-          ),
-        ],
+            Switch(
+              value: isSelected,
+              onChanged: (val) => setState(() => _symptomStates[q.symptomId] = val),
+              activeThumbColor: AppColors.primary,
+              activeTrackColor: AppColors.primary.withOpacity(0.2),
+              inactiveThumbColor: Colors.white,
+              inactiveTrackColor: Colors.grey.withOpacity(0.1),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -412,6 +422,32 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() => _storedResult = assessmentData);
     } catch (_) {}
+
+    // If user is logged in, persist quick assessment to backend history as well.
+    if (!_isGuest) {
+      final answers = <Map<String, dynamic>>[];
+      for (final q in _config!.questions) {
+        final selected = _symptomStates[q.symptomId] ?? false;
+        if (!selected) continue;
+        answers.add({
+          'questionId': q.questionId,
+          'cfValue': 1.0,
+        });
+      }
+
+      if (answers.isNotEmpty) {
+        try {
+          await AssessmentApiService.submitAssessment(
+            assessmentTypeId: 1,
+            answers: answers,
+          );
+        } catch (e) {
+          // Don't block navigation to result page if saving history fails, but log for debugging.
+          // ignore: avoid_print
+          print('submitAssessment(quick) failed: $e');
+        }
+      }
+    }
 
     if (!mounted) return;
     Navigator.pushNamed(

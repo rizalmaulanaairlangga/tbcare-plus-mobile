@@ -15,6 +15,12 @@ class AppConstants {
   static final String usersMe      = '$baseUrl/api/v1/auth/me';
   static final String quickCheckConfig = '$baseUrl/api/v1/assessment/quick-check-config';
   static final String fullAssessmentConfig = '$baseUrl/api/v1/assessment/full-assessment-config';
+  static final String submitAssessment = '$baseUrl/api/v1/assessment/submit';
+  static final String assessmentHistory = '$baseUrl/api/v1/assessment/history';
+  static final String assessmentHistorySessions = '$baseUrl/api/v1/assessment/history-sessions';
+  static String assessmentHistorySessionDetail(String sessionKey) =>
+      '$baseUrl/api/v1/assessment/history-sessions/$sessionKey';
+  static String assessmentHistoryDetail(int id) => '$baseUrl/api/v1/assessment/history/$id';
 
   // ── SharedPreferences Keys ───────────────────────────────────────────
   static const String keyAccessToken  = 'access_token';

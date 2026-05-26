@@ -272,7 +272,30 @@ class _ResultPageState extends State<ResultPage> {
       return const Center(child: Text('Data hasil tidak ditemukan.'));
     }
 
-    final resultsList = _fullResultData!['results'] as List<dynamic>? ?? [];
+    final rawResults = _fullResultData!['results'] as List<dynamic>? ?? [];
+    final resultsList = rawResults
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
+
+    int riskRank(String? code) {
+      final c = (code ?? '').toUpperCase();
+      if (c.contains('HIGH')) return 3;
+      if (c.contains('MEDIUM') || c.contains('MODERATE')) return 2;
+      return 1;
+    }
+
+    resultsList.sort((a, b) {
+      final aRisk = a['riskLevel'] as Map<String, dynamic>?;
+      final bRisk = b['riskLevel'] as Map<String, dynamic>?;
+      final aRank = riskRank(aRisk?['code'] as String?);
+      final bRank = riskRank(bRisk?['code'] as String?);
+      if (aRank != bRank) return bRank.compareTo(aRank);
+
+      final aScore = (a['totalScore'] as num?)?.toDouble() ?? 0.0;
+      final bScore = (b['totalScore'] as num?)?.toDouble() ?? 0.0;
+      return bScore.compareTo(aScore);
+    });
 
     return Column(
       children: [
@@ -280,7 +303,7 @@ class _ResultPageState extends State<ResultPage> {
           child: ListView.builder(
             itemCount: resultsList.length,
             itemBuilder: (context, index) {
-              final item = resultsList[index] as Map<String, dynamic>;
+              final item = resultsList[index];
               final tbTypeName = item['tbTypeName'] as String? ?? 'Tidak Diketahui';
               final totalScore = (item['totalScore'] as num?)?.toDouble() ?? 0.0;
               final scorePercent = totalScore.round();

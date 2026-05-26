@@ -14,6 +14,8 @@ import '../features/profile/pages/change_password_page.dart';
 import '../features/about/pages/about_page.dart';
 
 class AppRoutes {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   static const String cover = '/';
   static const String login = '/login';
   static const String register = '/register';

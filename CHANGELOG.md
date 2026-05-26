@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Auto-logout on token expiry**: Added `SessionService` class that clears local storage and uses `AppRoutes.navigatorKey` to programmatically redirect the user to the login page when a `401 Unauthorized` response is received from any authenticated API call.
+- **`navigatorKey` global navigation**: Registered `GlobalKey<NavigatorState>` in `AppRoutes` and passed it to `MaterialApp` in `main.dart` to enable navigation from outside the widget tree (required for auto-logout).
+- **Quick assessment save to Supabase**: `AssessmentApiService.submitAssessment()` reinstated and integrated into `ResultPage` — when a logged-in user completes a quick assessment, the result is submitted to `POST /api/v1/assessment/submit` for server-side storage.
+
+### Fixed
+- **Quick assessment card tap selection**: Wrapped symptom answer cards in `GestureDetector` on the `HomePage` so tapping anywhere on the card toggles the selection — previously required tapping the small `Switch` widget directly.
+- **Double-entry prevention**: Backend integration ensures that if a logged-in user has already completed a full assessment, submitting a quick assessment will return the calculated result **without** saving a duplicate entry to the database.
+
+### Changed
+- **Removed real-time percentage display** from quick assessment answer cards — score percentage is no longer shown while answering questions; results are only displayed on the results page after submission.
+- **`AssessmentApiService`**: All authenticated endpoints (`submitAssessment`, `fetchHistory`, `fetchHistorySessions`, `fetchHistorySessionDetail`, `fetchHistoryDetail`) now intercept `401` responses and trigger `SessionService.logoutAndRedirectToLogin()` automatically.
+- **`AuthApiService.fetchCurrentUser`**: Also intercepts `401` and delegates to `SessionService.logoutAndRedirectToLogin()`.
+
+
+
+### Added
 - Close notification button (X) on the login page success banner after successful account creation.
 - Functional **Registration & Login Logic Endpoints Integration**:
   - Converted `LoginPage` from a static mock to a fully functional `StatefulWidget` handling form inputs, controller disposal, login API submission, local storage persistence, and home page redirection.

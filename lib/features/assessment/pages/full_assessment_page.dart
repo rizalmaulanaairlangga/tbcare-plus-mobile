@@ -6,7 +6,6 @@ import '../../../core/widgets/guest_bottom_nav.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../routes/app_routes.dart';
 import '../../../core/services/storage_service.dart';
-import '../../../core/services/guest_assessment_service.dart';
 import '../../../core/services/assessment_api_service.dart';
 import '../../../core/models/assessment_config_models.dart';
 
@@ -21,7 +20,9 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
   QuickCheckConfig? _config;
   bool _loading = true;
   String? _error;
-  bool _isGuest = true;
+
+  bool _isCheckingAuth = true;
+  bool _isLoggedIn = false;
 
   // Track checked state by questionId
   final Map<int, bool> _answerStates = {};
@@ -34,13 +35,18 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
   @override
   void initState() {
     super.initState();
-    _init();
+    _initSessionAndLoad();
   }
 
-  Future<void> _init() async {
+  Future<void> _initSessionAndLoad() async {
     final loggedIn = await StorageService.isLoggedIn();
     if (!mounted) return;
-    setState(() => _isGuest = !loggedIn);
+    setState(() {
+      _isCheckingAuth = false;
+      _isLoggedIn = loggedIn;
+    });
+
+    // Guest users are allowed to run full assessment; only saving to history requires login.
     _loadConfig();
   }
 
@@ -164,23 +170,33 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
 
       if (!mounted) return;
 
-      // Save to local storage for guest users
-      if (_isGuest) {
-        try {
-          await GuestAssessmentService.save({
-            'type': 'FULL ASSESSMENT',
-            'results': results,
-            'savedAt': DateTime.now().toIso8601String(),
-          });
-        } catch (_) {}
-      }
+      // Persist assessment answers to backend history.
+      final answers = _config!.questions
+          .map((q) => {
+                'questionId': q.questionId,
+                'cfValue': (_answerStates[q.questionId] ?? false) ? 1.0 : 0.0,
+              })
+          .toList();
 
+      if (_isLoggedIn) {
+        try {
+          await AssessmentApiService.submitAssessment(
+            assessmentTypeId: 2,
+            answers: answers,
+          );
+        } catch (e) {
+          // Don't block user flow if history save fails, but log for debugging.
+          // ignore: avoid_print
+          print('submitAssessment(full) failed: $e');
+        }
+      }
+      
       Navigator.pushNamed(
         context,
         AppRoutes.result,
         arguments: {
           'isFullAssessment': true,
-          'isGuest': _isGuest,
+          'isGuest': !_isLoggedIn,
           'result': result,
         },
       );
@@ -218,11 +234,13 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
 
                 // Scrollable Content
                 Expanded(
-                  child: _loading
+                  child: _isCheckingAuth
                       ? const Center(child: CircularProgressIndicator())
-                      : _error != null
-                          ? _buildErrorContent()
-                          : _buildAssessmentContent(),
+                      : _loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _error != null
+                              ? _buildErrorContent()
+                              : _buildAssessmentContent(),
                 ),
               ],
             ),
@@ -236,21 +254,25 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
             ),
         ],
       ),
-      bottomNavigationBar: _isGuest
-          ? const GuestBottomNav(currentIndex: -1)
-          : AppBottomNav(
+      bottomNavigationBar: _isLoggedIn
+          ? AppBottomNav(
               currentIndex: -1,
               onTap: (i) {
                 final routes = [AppRoutes.home, AppRoutes.history, AppRoutes.profile];
                 if (i < routes.length) {
-                  Navigator.pushNamedAndRemoveUntil(context, routes[i], (route) => false);
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    routes[i],
+                    (route) => false,
+                    arguments: {'isGuest': false},
+                  );
                 }
               },
-            ),
+            )
+          : const GuestBottomNav(currentIndex: -1),
     );
   }
 
-  // ─── ERROR CONTENT ───────────────────────────────────────
   Widget _buildErrorContent() {
     return Center(
       child: Padding(
@@ -319,64 +341,14 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
     final title = _categoryName(tbTypeId);
     final subtitle = 'Gejala dan indikasi $title';
 
-    // Select styling based on index
-    Widget content;
-    if (index == 0) {
-      // Toggle switches
-      content = Column(
-        children: questions.map((q) {
-          final isSelected = _answerStates[q.questionId] ?? false;
-          final icon = getSymptomIcon(q.symptomCode);
-          return _buildToggleItem(q.questionId, icon, q.questionText, isSelected);
-        }).toList(),
-      );
-    } else if (index == 1) {
-      // Checkboxes
-      content = Column(
-        children: questions.asMap().entries.map((entry) {
-          final qIndex = entry.key;
-          final q = entry.value;
-          final isChecked = _answerStates[q.questionId] ?? false;
-          final isLast = qIndex == questions.length - 1;
-          return _buildCheckboxItem(q.questionId, q.questionText, isChecked, showDivider: !isLast);
-        }).toList(),
-      );
-    } else if (index == 2) {
-      // Grid cards
-      content = Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.25,
-          children: questions.map((q) {
-            final isSelected = _answerStates[q.questionId] ?? false;
-            final icon = getSymptomIcon(q.symptomCode);
-            return _buildGridCard(q.questionId, icon, q.symptomName, isSelected);
-          }).toList(),
-        ),
-      );
-    } else {
-      // Chips / Wrap
-      content = Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: questions.map((q) {
-              final isSelected = _answerStates[q.questionId] ?? false;
-              final icon = getSymptomIcon(q.symptomCode);
-              return _buildChip(q.questionId, icon, q.symptomName, isSelected);
-            }).toList(),
-          ),
-        ),
-      );
-    }
+    // All forms now consistently use Toggle switches (_buildToggleItem)
+    Widget content = Column(
+      children: questions.map((q) {
+        final isSelected = _answerStates[q.questionId] ?? false;
+        final icon = getSymptomIcon(q.symptomCode);
+        return _buildToggleItem(q.questionId, icon, q.questionText, isSelected);
+      }).toList(),
+    );
 
     final categoryIcons = [
       Icons.air_outlined,
@@ -964,6 +936,8 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
     );
   }
 
+  // Guest users are allowed to access full assessment; login is only required to save history.
+  void _showLoginRequiredDialog() {}
 }
 
 IconData getSymptomIcon(String code) {

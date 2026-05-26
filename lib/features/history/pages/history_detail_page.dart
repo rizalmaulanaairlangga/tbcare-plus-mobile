@@ -1,48 +1,66 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/services/assessment_api_service.dart';
 import '../../../core/theme/app_colors.dart';
 
-class HistoryDetailPage extends StatelessWidget {
+class HistoryDetailPage extends StatefulWidget {
   final Map<String, dynamic> item;
 
   const HistoryDetailPage({super.key, required this.item});
 
   @override
+  State<HistoryDetailPage> createState() => _HistoryDetailPageState();
+}
+
+class _HistoryDetailPageState extends State<HistoryDetailPage> {
+  bool _loading = true;
+  Map<String, dynamic>? _detail;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    try {
+      final sessionKey = (widget.item['sessionKey'] as String?) ?? '';
+      final detail = await AssessmentApiService.fetchHistorySessionDetail(sessionKey);
+      if (!mounted) return;
+      setState(() {
+        _detail = detail;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = item['color'] as Color;
+    final color = widget.item['color'] as Color;
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // Filter symptoms where status is true
-    final List<dynamic> rawSymptoms = item['symptoms'] ?? [
-      {
-        'name': 'Batuk Kronis',
-        'status': true,
-        'desc': 'Batuk yang berlangsung lebih dari 2 minggu. Ini bisa menjadi tanda berbagai masalah pernapasan dan memerlukan pemantauan oleh tenaga medis untuk memastikan diagnosis yang tepat.'
-      },
-      {
-        'name': 'Nyeri Dada',
-        'status': true,
-        'desc': 'Nyeri tajam saat bernapas atau batuk. Ini mungkin mengindikasikan peradangan pada lapisan paru-paru atau kondisi serius lainnya yang memerlukan perhatian segera dan tes diagnostik.'
-      },
-      {
-        'name': 'Kelelahan',
-        'status': true,
-        'desc': 'Merasa sangat lelah atau lemah. Ini adalah gejala sistemik umum yang dapat berdampak signifikan pada aktivitas sehari-hari dan sering terlihat pada infeksi kronis.'
-      },
-      {
-        'name': 'Keringat Malam',
-        'status': false,
-        'desc': 'Berkeringat deras saat tidur. Sering disertai demam, ini adalah gejala klasik dari beberapa infeksi seperti tuberkulosis.'
-      },
-      {
-        'name': 'Penurunan Berat Badan',
-        'status': true,
-        'desc': 'Penurunan berat badan yang tidak dapat dijelaskan. Kehilangan berat badan tanpa usaha bisa menjadi tanda masalah kesehatan serius dan harus diperiksa oleh dokter.'
-      },
-    ];
+    final items = (_detail?['items'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
 
-    final symptoms = rawSymptoms.where((s) => s['status'] == true).toList();
+    String recommendation = 'Silakan kunjungi fasilitas kesehatan terdekat untuk pemeriksaan lebih lanjut.';
+    if (items.isNotEmpty) {
+      for (final it in items) {
+        final breakdown = it['scoreBreakdown'];
+        if (breakdown is Map && breakdown['results'] is List && (breakdown['results'] as List).isNotEmpty) {
+          final primaryResult = (breakdown['results'] as List).first;
+          if (primaryResult is Map && primaryResult['riskLevel'] is Map) {
+            final rec = (primaryResult['riskLevel'] as Map)['recommendation'];
+            if (rec is String && rec.isNotEmpty) {
+              recommendation = rec;
+              break;
+            }
+          }
+        }
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -56,38 +74,39 @@ class HistoryDetailPage extends StatelessWidget {
               children: [
                 _buildHeader(context, color),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Result Summary Card
-                        _buildSummaryCard(color),
-                        const SizedBox(height: 24),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Result Summary Card
+                              _buildSummaryCard(color),
+                              const SizedBox(height: 24),
 
-                        // Insight Section
-                        const Text(
-                          'Wawasan Gejala',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.foreground,
-                            letterSpacing: -0.5,
+                              // Insight Section
+                              if (items.isNotEmpty) ...[
+                                const Text(
+                                  'Detail Tipe TBC',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.foreground,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                ...items.map((it) => _buildTbTypeSection(context, it, color)).toList(),
+                                const SizedBox(height: 32),
+                              ],
+                              
+                              // Recommendation
+                              _buildRecommendationCard(color, recommendation),
+                              const SizedBox(height: 40),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        
-                        // Symptom List
-                        ...symptoms.map((s) => _buildSymptomItem(context, s, color)).toList(),
-                        
-                        const SizedBox(height: 32),
-                        
-                        // Recommendation
-                        _buildRecommendationCard(color),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -153,7 +172,7 @@ class HistoryDetailPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item['date'],
+                    widget.item['date'],
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
@@ -162,7 +181,7 @@ class HistoryDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item['type'],
+                    widget.item['type'],
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
@@ -178,7 +197,7 @@ class HistoryDetailPage extends StatelessWidget {
                   color: Colors.white,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(item['icon'], color: color, size: 28),
+                child: Icon(widget.item['icon'], color: color, size: 28),
               ),
             ],
           ),
@@ -189,7 +208,7 @@ class HistoryDetailPage extends StatelessWidget {
               Column(
                 children: [
                   Text(
-                    item['percentage'],
+                    widget.item['percentage'],
                     style: TextStyle(
                       fontSize: 48,
                       fontWeight: FontWeight.w900,
@@ -198,7 +217,9 @@ class HistoryDetailPage extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Tingkat Risiko',
+                    (widget.item['tbType'] as String?)?.isNotEmpty == true
+                        ? (widget.item['tbType'] as String)
+                        : 'Tingkat Risiko',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -215,7 +236,7 @@ class HistoryDetailPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item['riskLevel'],
+                      widget.item['riskLevel'],
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
@@ -225,7 +246,7 @@ class HistoryDetailPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Memerlukan perhatian segera',
+                      widget.item['riskLevelCode'] == 'HIGH' ? 'Requires immediate attention' : 'Monitor your condition',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -237,6 +258,99 @@ class HistoryDetailPage extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTbTypeSection(BuildContext context, Map<String, dynamic> item, Color themeColor) {
+    final tbTypeName = (item['primaryTbTypeName'] ?? '').toString();
+    final score = (item['totalScore'] is num) ? (item['totalScore'] as num).round() : 0;
+    final riskTitle = (item['riskLevelTitle'] ?? 'Low Risk').toString();
+    final riskCode = (item['riskLevelCode'] ?? 'LOW').toString().toUpperCase();
+
+    final selectedSymptomsRaw = item['selectedSymptoms'];
+    final selectedSymptoms = selectedSymptomsRaw is List ? selectedSymptomsRaw : <dynamic>[];
+
+    final symptoms = selectedSymptoms
+        .where((s) => s is Map && (s['cfValue'] is num) && (s['cfValue'] as num) > 0)
+        .map((s) {
+          final m = s as Map;
+          return {
+            'name': m['symptomName'] ?? '-',
+            'status': true,
+            'desc': m['symptomDescription'] ?? 'No description available.',
+          };
+        })
+        .toList();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: themeColor.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: themeColor.withOpacity(0.12), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tbTypeName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$score% • $riskTitle ($riskCode)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: themeColor.withOpacity(0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: themeColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  '$score%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: themeColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (symptoms.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Gejala dipilih (${symptoms.length})',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppColors.mutedForeground.withOpacity(0.9),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...symptoms.map((s) => _buildSymptomItem(context, s, themeColor)).toList(),
+          ],
         ],
       ),
     );
@@ -441,7 +555,7 @@ class HistoryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildRecommendationCard(Color color) {
+  Widget _buildRecommendationCard(Color color, String recommendation) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -463,22 +577,22 @@ class HistoryDetailPage extends StatelessWidget {
         children: [
           const Icon(Icons.lightbulb_rounded, color: Colors.white, size: 32),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Rekomendasi',
+                const Text(
+                  'Recommendation',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Silakan kunjungi fasilitas kesehatan terdekat untuk tes dahak atau rontgen dada.',
-                  style: TextStyle(
+                  recommendation,
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: Colors.white,

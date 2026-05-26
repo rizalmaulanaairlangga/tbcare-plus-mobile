@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../constants/app_constants.dart';
 import '../models/auth_models.dart';
+import 'session_service.dart';
 import 'storage_service.dart';
 
 class AuthApiService {
@@ -81,6 +82,11 @@ class AuthApiService {
       final response = await http
           .get(Uri.parse(AppConstants.usersMe), headers: headers)
           .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 401) {
+        await SessionService.logoutAndRedirectToLogin();
+        throw Exception('Sesi login telah berakhir. Silakan login kembali.');
+      }
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 

@@ -11,16 +11,16 @@ TBCare+ is a tuberculosis early-detection expert system mobile app built with **
 - **Expert System Scoring** — Cross-TB-type certainty factor calculation
 - **Assessment History** — Session-grouped history with detailed symptom insights
 - **Profile Management** — Edit profile, change password, profile picture upload
-- **Offline Support** — Guests can complete and save an assessment locally; question
-  configs are cached after first fetch as an offline fallback. Authenticated actions
-  require connectivity and persist to the server.
+- **Offline Support** — Guests can complete an assessment with results kept in memory
+  for the current session; question configs are cached after first fetch as an offline
+  fallback. Authenticated actions require connectivity and persist to the server.
 
 ## Tech Stack
 
 - **Framework**: Flutter (Dart 3.12+)
 - **Auth**: Supabase JWT with automatic (silent) token refresh
 - **HTTP**: `http`
-- **Local Storage**: `shared_preferences` (tokens, cached configs, guest assessment)
+- **Local Storage**: `shared_preferences` (tokens, cached configs)
 - **Connectivity**: `connectivity_plus` (offline pre-flight gating)
 - **Files & Images**: `file_picker`, `image` (profile picture pick/encode)
 - **Misc**: `intl` (date formatting), `url_launcher` (external links)

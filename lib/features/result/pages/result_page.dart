@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/services/storage_service.dart';
-import '../../../core/services/guest_assessment_service.dart';
 import '../../../core/services/assessment_api_service.dart';
 import '../../../core/models/assessment_config_models.dart';
 import '../../../core/theme/app_colors.dart';
@@ -60,13 +59,13 @@ class _ResultPageState extends State<ResultPage> {
           _isGuest = (raw['isGuest'] as bool?) ?? true;
           _assessmentData = raw['assessmentData'] as Map<String, dynamic>?;
         }
-      } else {
-        final saved = await GuestAssessmentService.get();
-        if (saved != null) {
-          _currentRisk = _parseRisk(saved['riskLevel'] as String?);
-          _percentage = (saved['percentage'] as int?) ?? 0;
-          _assessmentData = saved;
-        }
+      } else if (mounted) {
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.home,
+          arguments: {'isGuest': true},
+        );
+        return;
       }
       final loggedIn = await StorageService.isLoggedIn();
       final user = loggedIn ? await StorageService.getUser() : null;
@@ -79,17 +78,6 @@ class _ResultPageState extends State<ResultPage> {
       });
     } catch (_) {
       if (mounted) setState(() => _loaded = true);
-    }
-  }
-
-  RiskLevel _parseRisk(String? name) {
-    switch (name) {
-      case 'high':
-        return RiskLevel.high;
-      case 'medium':
-        return RiskLevel.medium;
-      default:
-        return RiskLevel.low;
     }
   }
 

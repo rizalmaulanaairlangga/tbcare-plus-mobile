@@ -5,7 +5,6 @@ import '../../../routes/app_routes.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/assessment_api_service.dart';
 import '../../../core/services/connectivity_service.dart';
-import '../../../core/services/guest_assessment_service.dart';
 import '../../../core/models/assessment_config_models.dart';
 import '../../../core/utils/network_exception.dart';
 
@@ -292,7 +291,7 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
               highestRiskResult['riskLevel'] as Map<String, dynamic>?;
           final symptoms = <String, bool>{};
           _answerStates.forEach((k, v) => symptoms[k.toString()] = v);
-          await GuestAssessmentService.save({
+          StorageService.guestSessionResult = {
             'riskLevel': riskLevel?['code'] ?? 'LOW',
             'percentage': highestRiskResult['totalScore']?.toInt() ?? 0,
             'riskCode': riskLevel?['code'] ?? 'LOW',
@@ -301,7 +300,7 @@ class _FullAssessmentPageState extends State<FullAssessmentPage> {
             'type': 'FULL ASSESSMENT',
             'symptoms': symptoms,
             'fullResults': results,
-          });
+          };
         }
       }
       final answers = _config!.questions

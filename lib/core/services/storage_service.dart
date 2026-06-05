@@ -6,6 +6,7 @@ import '../models/auth_models.dart';
 class StorageService {
   static UserModel? _cachedUser;
   static Map<String, dynamic>? lastAssessmentResult;
+  static Map<String, dynamic>? guestSessionResult;
 
   static UserModel? get cachedUser => _cachedUser;
 
@@ -81,6 +82,7 @@ class StorageService {
   // ── Clear (logout) ────────────────────────────────────────────────────
   static Future<void> clear() async {
     _cachedUser = null;
+    guestSessionResult = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.keyAccessToken);
     await prefs.remove(AppConstants.keyRefreshToken);

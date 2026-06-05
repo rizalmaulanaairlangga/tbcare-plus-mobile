@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/auth_api_service.dart';
 import '../../../core/services/connectivity_service.dart';
-import '../../../core/services/guest_assessment_service.dart';
 import '../../../core/utils/network_exception.dart';
 import '../../../core/utils/url_utils.dart';
 import '../../../core/services/assessment_api_service.dart';
@@ -193,14 +192,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _loadStoredResult() async {
-    final saved = await GuestAssessmentService.get();
-    if (!mounted) return;
-    if (saved != null) {
-      setState(() => _storedResult = saved);
-    }
-  }
-
   Future<void> _loadUser() async {
     // Source-of-truth for "is this an authenticated session" is the access
     // token. A cached user without a token (e.g., after token expiry or a
@@ -216,8 +207,8 @@ class _HomePageState extends State<HomePage> {
     });
 
     if (_isGuest) {
-      // Guest (fresh start or returning): load stored result.
-      if (_storedResult == null) _loadStoredResult();
+      // Guest result is session-scoped: kept in memory only for this app run.
+      setState(() => _storedResult = StorageService.guestSessionResult);
     } else if (!_isGuest && wasGuest) {
       // Guest→logged-in: hide guest result, load from backend.
       setState(() => _storedResult = null);
@@ -631,11 +622,9 @@ class _HomePageState extends State<HomePage> {
         // Kick a background refresh to pick up the canonical server record.
         if (mounted) _loadMostRecentAssessment();
       } else {
-        // Guest path: persist locally so the home card survives navigation.
-        try {
-          await GuestAssessmentService.save(assessmentData);
-          if (mounted) setState(() => _storedResult = assessmentData);
-        } catch (_) {}
+        // Guest path: keep result only for the current app process.
+        StorageService.guestSessionResult = assessmentData;
+        if (mounted) setState(() => _storedResult = assessmentData);
       }
 
       if (!mounted) return;
@@ -1340,7 +1329,7 @@ class _HomePageState extends State<HomePage> {
     if (isFullAssessment) {
       Navigator.pushNamed(context, AppRoutes.fullAssessment);
     } else {
-      GuestAssessmentService.clear();
+      StorageService.guestSessionResult = null;
       setState(() {
         _storedResult = null;
         if (_config != null) {

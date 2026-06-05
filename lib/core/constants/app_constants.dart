@@ -67,7 +67,6 @@ class AppConstants {
   // proactively before a request rather than waiting for a 401.
   static const String keyTokenExpiresAt = 'token_expires_at';
   static const String keyUser = 'user_json';
-  static const String keyGuestAssessment = 'guest_assessment_json';
 
   // Cached "most recent assessment" summary for logged-in users. Namespaced
   // by user id at write time to prevent cross-account leakage on shared

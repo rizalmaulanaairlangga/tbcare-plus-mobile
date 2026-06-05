@@ -1,15 +1,21 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppConstants {
   // ── Backend API base URL ─────────────────────────────────────────────
   //
-  // Default: Azure App Service (production)
-  // Untuk local dev, set USE_LOCAL = true dan jalankan backend via dotnet run.
-  static const bool _useLocal = false;
-  static const String _prodUrl =
-      'https://tbcare-plus-api-cugyfka4fcaedmfp.indonesiacentral-01.azurewebsites.net';
-  static const String _localUrl = 'http://localhost:5181';
+  // Reads production / local URLs from the bundled .env file via flutter_dotenv.
+  // Copy .env.example to .env and adjust for your environment.
+  //
+  // When USE_LOCAL=true (and in debug mode), the app points to the local
+  // backend. Android emulators automatically use 10.0.2.2 instead of localhost.
+  static final String _prodUrl =
+      dotenv.env['API_BASE_URL'] ?? 'http://localhost:5181';
+  static final String _localUrl =
+      dotenv.env['API_LOCAL_URL'] ?? 'http://localhost:5181';
+  static final bool _useLocal =
+      (dotenv.env['USE_LOCAL'] ?? 'false').toLowerCase() == 'true';
 
   static final String baseUrl = () {
     if (_useLocal && kDebugMode) {

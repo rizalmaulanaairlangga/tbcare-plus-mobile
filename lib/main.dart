@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme/app_theme.dart';
 import 'routes/app_routes.dart';
 
-void main() {
+Future<void> main() async {
+  // Load environment variables from the bundled .env file.
+  // Must run before any code that accesses AppConstants / dotenv.env.
+  await dotenv.load();
   runApp(const MyApp());
 }
 

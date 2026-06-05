@@ -42,11 +42,21 @@ flutter pub get
 
 ### Backend Configuration
 
-Edit `lib/core/constants/app_constants.dart` to point to your backend. The default is the production Azure App Service URL. For local development, set `_useLocal = true`:
+Copy `.env.example` to `.env` and fill in your backend URL:
 
-```dart
-static const bool _useLocal = true; // Uses http://localhost:5181
+```bash
+cp .env.example .env
 ```
+
+The `.env` file contains three settings:
+
+```env
+API_BASE_URL=https://your-backend-api.azurewebsites.net
+API_LOCAL_URL=http://localhost:5181
+USE_LOCAL=false
+```
+
+For local development, set `USE_LOCAL=true` to point the app at `http://localhost:5181` (Android emulator users automatically get `http://10.0.2.2:5181`).
 
 ### Run
 
